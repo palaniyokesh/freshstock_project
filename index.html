@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FreshStock AI | Inventory, Forecasting & POS</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">✳</div>
+      FreshStock <span style="color:var(--green)">AI</span>
+    </div>
+
+    <div class="navlabel">WORKSPACE</div>
+    <nav class="nav">
+      <a class="active" href="#overview"><span>▦</span> Overview</a>
+      <a href="#inventory"><span>▤</span> Inventory</a>
+      <a href="#forecast"><span>⌁</span> Demand Forecast</a>
+      <a href="#sales"><span>↗</span> Sales & POS</a>
+      <a href="#warehouse"><span>▥</span> Warehouse & Batches</a>
+      <a href="#suppliers"><span>♧</span> Suppliers</a>
+      <a href="#reports"><span>▧</span> Reports</a>
+    </nav>
+
+    <div class="navlabel">MANAGEMENT</div>
+    <nav class="nav">
+      <a href="#calculator"><span>⚙</span> Forecast Settings</a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <b>✦ Smart insight</b>
+      Demand estimates automatically improve when you import sales records and track batch expiries.
+      <div class="server-badge" id="serverStatus">
+        <span class="server-dot"></span> Checking backend...
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Workspace -->
+  <main class="main">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Retail intelligence / Dashboard</div>
+        <h1 class="h1" id="viewTitle">Supermarket Overview</h1>
+        <div class="subtitle" id="viewSubtitle">Supermarket executive overview, key metrics, and demand forecasting.</div>
+      </div>
+      <div class="top-actions">
+        <select class="select" id="periodSelect" aria-label="Period">
+          <option value="today">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="all">All time</option>
+        </select>
+        <button class="btn" onclick="downloadStockCSV()">↓ Export CSV</button>
+        <button class="btn" onclick="window.print()">↧ Print</button>
+        <div class="profile" title="Store Owner">SO</div>
+      </div>
+    </header>
+
+    <!-- Quick Action Shortcut Banner -->
+    <section class="action-banner">
+      <div class="action-banner-text">
+        <b>Quick Actions:</b> Record store sales, receive stock batches, or manage suppliers.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary sm" onclick="openReceiveModal()">＋ Receive Stock</button>
+        <button class="btn sm" onclick="openSaleModal()">↗ Record Sale (POS)</button>
+        <button class="btn sm" onclick="switchTab('inventory')">▤ View Inventory</button>
+        <button class="btn sm" onclick="resetToSampleData()">↺ Reload Demo Data</button>
+      </div>
+    </section>
+
+    <!-- VIEW 1: OVERVIEW -->
+    <div class="view-panel active" id="view-overview">
+      <!-- KPIs -->
+      <section class="grid kpis">
+        <div class="card">
+          <div class="kpi-head">Sales revenue <span class="kpi-icon">₹</span></div>
+          <div class="kpi-value" id="salesValue">₹0</div>
+          <div class="kpi-foot">Live store checkout revenue</div>
+        </div>
+        <div class="card">
+          <div class="kpi-head">Gross margin <span class="kpi-icon">％</span></div>
+          <div class="kpi-value" id="marginValue">—</div>
+          <div class="kpi-foot">Calculated from sales & COGS</div>
+        </div>
+        <div class="card">
+          <div class="kpi-head">Inventory value <span class="kpi-icon">▤</span></div>
+          <div class="kpi-value" id="stockValue">₹0</div>
+          <div class="kpi-foot">Active stock at cost price</div>
+        </div>
+        <div class="card">
+          <div class="kpi-head">Stockout risk <span class="kpi-icon">⚠</span></div>
+          <div class="kpi-value" id="riskCount">0 SKUs</div>
+          <div class="kpi-foot"><span class="negative">Needs attention</span> within 7 days</div>
+        </div>
+        <div class="card">
+          <div class="kpi-head">Waste / expiry risk <span class="kpi-icon">♧</span></div>
+          <div class="kpi-value" id="wasteValue">₹0</div>
+          <div class="kpi-foot">Stock expiring in ≤ 7 days</div>
+        </div>
+      </section>
+
+      <!-- Forecast Chart & Seasonal Grid -->
+      <section class="grid main-grid">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Sales & demand forecast</h2>
+              <div class="card-sub">Actual 30-day sales vs. AI statistical 14-day projection</div>
+            </div>
+            <select class="select" id="forecastCategory">
+              <option value="all">All categories</option>
+              <option value="grocery">Grocery</option>
+              <option value="fresh">Fresh food</option>
+              <option value="household">Household</option>
+              <option value="beverages">Beverages</option>
+              <option value="bakery">Bakery</option>
+            </select>
+          </div>
+          <div class="legend">
+            <span><i class="dot" style="background:#14866d"></i>Actual daily sales</span>
+            <span><i class="dot" style="background:#f2a64a"></i>Statistical forecast (+14d)</span>
+            <span style="color:#94a3b8">Confidence range ±12%</span>
+          </div>
+          <div class="chart-wrap">
+            <svg id="salesChart" viewBox="0 0 700 245" role="img" aria-label="Sales and demand forecast line chart"></svg>
+          </div>
+          <div class="forecast-note">
+            Calculated using moving averages, weekday seasonality indices, and lead-time buffers. Confidence improves as POS transactions accumulate.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Seasonal demand outlook</h2>
+              <div class="card-sub">Expected retail demand uplift</div>
+            </div>
+            <span class="pill good">Next 90 days</span>
+          </div>
+          <div class="season-list">
+            <div class="season">
+              <img src="https://images.unsplash.com/photo-1601493700631-2b16ec4b4716?auto=format&fit=crop&w=160&q=80" alt="Fresh mangoes">
+              <div class="season-info">
+                <b>Summer / fruit season</b>
+                <small>Mangoes, juices, bottled water</small>
+                <div class="bar"><i style="width:82%"></i></div>
+              </div>
+              <div class="season-growth">+32%</div>
+            </div>
+            <div class="season">
+              <img src="https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?auto=format&fit=crop&w=160&q=80" alt="Rice and grains">
+              <div class="season-info">
+                <b>Festival & family shopping</b>
+                <small>Rice, oil, sweets, dry fruits</small>
+                <div class="bar"><i style="width:70%"></i></div>
+              </div>
+              <div class="season-growth">+24%</div>
+            </div>
+            <div class="season">
+              <img src="https://images.unsplash.com/photo-1546173159-315724a31696?auto=format&fit=crop&w=160&q=80" alt="Cold drinks">
+              <div class="season-info">
+                <b>Hot weather essentials</b>
+                <small>Cool drinks, ice cream, curd</small>
+                <div class="bar"><i style="width:62%"></i></div>
+              </div>
+              <div class="season-growth">+18%</div>
+            </div>
+            <div class="season">
+              <img src="https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=160&q=80" alt="Fresh vegetables">
+              <div class="season-info">
+                <b>Monsoon planning</b>
+                <small>Tea, snacks, shelf-stable foods</small>
+                <div class="bar"><i style="width:48%"></i></div>
+              </div>
+              <div class="season-growth">+11%</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bottom Grid: Quick Inventory Preview + Real Priority Alerts -->
+      <section class="grid bottom-grid">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Inventory summary & reorder alerts</h2>
+              <div class="card-sub">Reorder guidance based on lead time and safety stock</div>
+            </div>
+            <button class="btn sm" onclick="switchTab('inventory')">View all products →</button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>PRODUCT</th>
+                  <th>ON HAND</th>
+                  <th>7D FORECAST</th>
+                  <th>DAYS LEFT</th>
+                  <th>REORDER QTY</th>
+                  <th>EXPIRY / BATCHES</th>
+                  <th>STATUS</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Priority alerts</h2>
+              <div class="card-sub">Stockout and expiry warnings</div>
+            </div>
+            <span class="pill good" id="alertCountBadge">Checking...</span>
+          </div>
+          <div class="alert-list" id="alertList">
+            <div class="alert">
+              <div class="alert-symbol good">✓</div>
+              <div><b>Loading alerts...</b><p>Connecting to alert engine.</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 2: INVENTORY -->
+    <div class="view-panel" id="view-inventory">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Product Inventory & Stock Tracking</h2>
+            <div class="card-sub">Filter by category, search SKUs, receive stock batches, or record sales.</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn primary" onclick="openReceiveModal()">＋ Receive Stock</button>
+            <button class="btn" onclick="downloadStockCSV()">↓ Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+          <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search product name or SKU...">
+          <select class="select" id="filterCategory">
+            <option value="all">All Categories</option>
+            <option value="grocery">Grocery</option>
+            <option value="fresh">Fresh Food</option>
+            <option value="household">Household</option>
+            <option value="beverages">Beverages</option>
+            <option value="bakery">Bakery</option>
+            <option value="other">Other</option>
+          </select>
+          <select class="select" id="filterStatus">
+            <option value="all">All Statuses</option>
+            <option value="low">Low Stock / Risk</option>
+            <option value="good">Healthy</option>
+          </select>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>PRODUCT</th>
+                <th>ON HAND</th>
+                <th>7D FORECAST</th>
+                <th>DAYS LEFT</th>
+                <th>REORDER QTY</th>
+                <th>EXPIRY / BATCHES</th>
+                <th>STATUS</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryRowsFull"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Add Product Form Card -->
+      <section class="card calculator" id="stockManager">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">＋ Add New Product / Opening Batch</h2>
+            <div class="card-sub">Add SKU details, safety stock thresholds, supplier lead times, and initial batch info.</div>
+          </div>
+          <span class="pill good">Synced Database</span>
+        </div>
+        <form id="productForm" class="calc-grid">
+          <div class="field">
+            <label for="pName">Product name *</label>
+            <input id="pName" required maxlength="80" placeholder="e.g. Fresh Cow Milk (500 ml)">
+          </div>
+          <div class="field">
+            <label for="pCategory">Category *</label>
+            <select id="pCategory">
+              <option value="grocery">Grocery</option>
+              <option value="fresh" selected>Fresh food</option>
+              <option value="household">Household</option>
+              <option value="beverages">Beverages</option>
+              <option value="bakery">Bakery</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pStock">Opening stock (units)</label>
+            <input id="pStock" type="number" min="0" step="1" value="20" required>
+          </div>
+          <div class="field">
+            <label for="pWeekly">Expected weekly sales (units)</label>
+            <input id="pWeekly" type="number" min="0" step="1" value="28" required>
+          </div>
+          <div class="field">
+            <label for="pCost">Purchase cost per unit (₹) *</label>
+            <input id="pCost" type="number" min="0" step="0.01" value="45.00" required>
+          </div>
+          <div class="field">
+            <label for="pLead">Supplier lead time (days)</label>
+            <input id="pLead" type="number" min="0" step="1" value="2" required>
+          </div>
+          <div class="field">
+            <label for="pPack">Order pack size</label>
+            <input id="pPack" type="number" min="1" step="1" value="6" required>
+          </div>
+          <div class="field">
+            <label for="pMin">Safety stock (units)</label>
+            <input id="pMin" type="number" min="0" step="1" value="10">
+          </div>
+          <div class="field">
+            <label for="pBatch">Batch / Lot ID</label>
+            <input id="pBatch" maxlength="40" placeholder="e.g. LOT-2026">
+          </div>
+          <div class="field">
+            <label for="pExpiry">Expiry date</label>
+            <input id="pExpiry" type="date">
+          </div>
+          <div class="field">
+            <label for="pReceived">Received date</label>
+            <input id="pReceived" type="date">
+          </div>
+          <div class="field" style="display:flex;align-items:end">
+            <button class="btn primary" type="submit" style="width:100%;padding:10px">＋ Save Product</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <!-- VIEW 3: DEMAND FORECAST -->
+    <div class="view-panel" id="view-forecast">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Demand Forecasting & AI Analytics</h2>
+            <div class="card-sub">Statistical demand curves combining past POS transactions, weekday cycles, and seasonality.</div>
+          </div>
+          <button class="btn" onclick="loadForecastChart()">↻ Refresh Model</button>
+        </div>
+
+        <div class="grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
+          <div class="result">
+            <small>Forecast Algorithm</small>
+            <strong style="font-size:16px">Cyclical Trend + Seasonality</strong>
+            <small>Weights weekend surges & category lift</small>
+          </div>
+          <div class="result">
+            <small>Safety Buffer</small>
+            <strong style="font-size:16px">95% Service Level</strong>
+            <small>Buffers against supplier delivery delays</small>
+          </div>
+          <div class="result">
+            <small>Reorder Recommendation</small>
+            <strong style="font-size:16px">Automated EOQ</strong>
+            <small>Rounds to supplier pack sizes</small>
+          </div>
+        </div>
+
+        <div class="forecast-note" style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:15px">
+          <b>How Demand Forecasting Works:</b>
+          Each product's daily demand is calculated using recent historical sales from the database. Seasonal spikes (such as summer mango uplift or festival grains demand) are factored in dynamically alongside supplier lead times to compute the ideal Reorder Point (ROP).
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 4: SALES & POS -->
+    <div class="view-panel" id="view-sales">
+      <section class="card" style="margin-bottom:20px">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">🛒 Point-of-Sale Quick Checkout</h2>
+            <div class="card-sub">Record sales immediately. The system deducts stock via FIFO from the earliest batches.</div>
+          </div>
+          <span class="pill good">Instant Inventory Sync</span>
+        </div>
+        <form id="saleQuickForm" class="calc-grid" onsubmit="event.preventDefault(); openSaleModal();">
+          <div class="field">
+            <label>Ready to record a checkout?</label>
+            <button type="button" class="btn primary" onclick="openSaleModal()" style="width:100%;padding:11px">
+              ＋ Open POS Sale Recorder
+            </button>
+          </div>
+          <div class="field" style="grid-column: span 3; display: flex; align-items: center">
+            <div style="font-size:12px;color:#64748b">
+              Sales transactions automatically update gross revenue, gross margin %, and reduce batch stock according to FIFO (First-In, First-Out).
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Recent Sales Transactions</h2>
+            <div class="card-sub">Detailed transaction log of all recorded store checkouts.</div>
+          </div>
+          <button class="btn" onclick="downloadSalesCSV()">↓ Export Sales CSV</button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>DATE & TIME</th>
+                <th>PRODUCT</th>
+                <th>UNITS SOLD</th>
+                <th>UNIT PRICE</th>
+                <th>TOTAL REVENUE</th>
+                <th>PROFIT (MARGIN)</th>
+                <th>NOTES</th>
+              </tr>
+            </thead>
+            <tbody id="salesHistoryRows">
+              <tr><td colspan="7" style="text-align:center;padding:24px;color:#94a3b8">Loading sales ledger...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 5: WAREHOUSE & BATCHES -->
+    <div class="view-panel" id="view-warehouse">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Warehouse Lot & Batch Ledger</h2>
+            <div class="card-sub">Full traceability of every received batch, lot ID, expiry dates, and unit quantities.</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <select class="select" id="warehouseStatusFilter" onchange="loadBatchesTable()">
+              <option value="all">All Batches</option>
+              <option value="active">Active Batches</option>
+              <option value="expired">Expired Batches</option>
+            </select>
+            <button class="btn primary" onclick="openReceiveModal()">＋ Receive Batch</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>BATCH / LOT ID</th>
+                <th>PRODUCT</th>
+                <th>AVAILABLE UNITS</th>
+                <th>EXPIRY DATE</th>
+                <th>DAYS REMAINING</th>
+                <th>RECEIVED DATE</th>
+                <th>BATCH VALUE</th>
+                <th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="warehouseRows">
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:#94a3b8">Loading batch data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 6: SUPPLIERS -->
+    <div class="view-panel" id="view-suppliers">
+      <section class="card" style="margin-bottom:20px">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">＋ Add New Supplier / Vendor</h2>
+            <div class="card-sub">Register vendors, delivery lead times, and contact details for procurement.</div>
+          </div>
+        </div>
+        <form id="supplierForm" class="calc-grid">
+          <div class="field">
+            <label for="supName">Supplier / Company Name *</label>
+            <input id="supName" required placeholder="e.g. Apex Consumer Goods Dist.">
+          </div>
+          <div class="field">
+            <label for="supContact">Contact Person</label>
+            <input id="supContact" placeholder="e.g. Anil Gupta">
+          </div>
+          <div class="field">
+            <label for="supEmail">Email address</label>
+            <input id="supEmail" type="email" placeholder="orders@supplier.com">
+          </div>
+          <div class="field">
+            <label for="supPhone">Phone / Mobile</label>
+            <input id="supPhone" placeholder="+91 98110 33445">
+          </div>
+          <div class="field">
+            <label for="supLead">Lead time (days)</label>
+            <input id="supLead" type="number" min="0" value="2" required>
+          </div>
+          <div class="field">
+            <label for="supCategory">Category</label>
+            <select id="supCategory">
+              <option value="fresh">Fresh food</option>
+              <option value="grocery">Grocery</option>
+              <option value="household">Household</option>
+              <option value="bakery">Bakery</option>
+              <option value="general" selected>General</option>
+            </select>
+          </div>
+          <div class="field" style="display:flex;align-items:end;grid-column:span 2">
+            <button class="btn primary" type="submit" style="width:100%;padding:10px">＋ Register Supplier</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Suppliers Directory</h2>
+            <div class="card-sub">Active procurement partners and supply lead times.</div>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>SUPPLIER NAME</th>
+                <th>CATEGORY</th>
+                <th>CONTACT PERSON</th>
+                <th>EMAIL</th>
+                <th>LEAD TIME</th>
+                <th>SUPPLIED PRODUCTS</th>
+              </tr>
+            </thead>
+            <tbody id="supplierRows">
+              <tr><td colspan="6" style="text-align:center;padding:20px;color:#94a3b8">Loading suppliers...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 7: REPORTS -->
+    <div class="view-panel" id="view-reports">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Store Reports & Auditing</h2>
+            <div class="card-sub">Export comprehensive store records for audits, tax compliance, or inventory checks.</div>
+          </div>
+        </div>
+
+        <div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 16px">
+          <div class="result">
+            <b style="font-size:14px;display:block;margin-bottom:6px">📊 Stock & Expiry Valuation Report</b>
+            <p style="font-size:12px;color:#64748b;margin:0 0 12px">Includes full SKU ledger, batch unit quantities, purchase costs, expiry dates, and total stock values.</p>
+            <button class="btn primary sm" onclick="downloadStockCSV()">↓ Download Inventory CSV</button>
+          </div>
+
+          <div class="result">
+            <b style="font-size:14px;display:block;margin-bottom:6px">💰 Sales & Margin History Report</b>
+            <p style="font-size:12px;color:#64748b;margin:0 0 12px">Detailed breakdown of historical checkouts, unit margins, total revenue, and cost of goods sold (COGS).</p>
+            <button class="btn primary sm" onclick="downloadSalesCSV()">↓ Download Sales CSV</button>
+          </div>
+
+          <div class="result">
+            <b style="font-size:14px;display:block;margin-bottom:6px">↺ Demo Data Management</b>
+            <p style="font-size:12px;color:#64748b;margin:0 0 12px">Reload the full supermarket sample dataset (8 SKUs, 30 days sales history, multiple batches).</p>
+            <button class="btn sm" onclick="resetToSampleData()">Reload Demo Store</button>
+          </div>
+
+          <div class="result">
+            <b style="font-size:14px;display:block;margin-bottom:6px">🗑 Database Reset</b>
+            <p style="font-size:12px;color:#64748b;margin:0 0 12px">Wipe all inventory and sales data to start completely fresh with an empty store.</p>
+            <button class="btn danger sm" onclick="clearAllInventory()">Clear All Data</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 8: CALCULATOR (MANAGEMENT) -->
+    <div class="view-panel" id="view-calculator">
+      <section class="card calculator">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">Smart Reorder Calculator</h2>
+            <div class="card-sub">Simulate safety stock, reorder point (ROP), and suggested order quantities.</div>
+          </div>
+          <span class="pill good">Interactive Supply Chain Model</span>
+        </div>
+        <div class="calc-grid">
+          <div class="field">
+            <label for="daily">Average sales per day (units)</label>
+            <input id="daily" type="number" min="0" value="18" oninput="calculate()">
+          </div>
+          <div class="field">
+            <label for="onhand">Current stock (units)</label>
+            <input id="onhand" type="number" min="0" value="42" oninput="calculate()">
+          </div>
+          <div class="field">
+            <label for="lead">Supplier lead time (days)</label>
+            <input id="lead" type="number" min="0" value="3" oninput="calculate()">
+          </div>
+          <div class="field">
+            <label for="season">Seasonal demand change (%)</label>
+            <input id="season" type="number" min="-90" max="300" value="20" oninput="calculate()">
+          </div>
+          <div class="field">
+            <label for="safety">Safety stock (days of sales)</label>
+            <input id="safety" type="number" min="0" value="3" oninput="calculate()">
+          </div>
+          <div class="field">
+            <label for="pack">Order pack size (units)</label>
+            <input id="pack" type="number" min="1" value="12" oninput="calculate()">
+          </div>
+          <div class="field">
+            <label for="cost">Unit purchase cost (₹)</label>
+            <input id="cost" type="number" min="0" value="45" oninput="calculate()">
+          </div>
+          <div class="field" style="display:flex;align-items:end">
+            <button class="btn primary" type="button" style="width:100%;padding:10px" onclick="calculate()">Recalculate</button>
+          </div>
+        </div>
+        <div class="calc-results">
+          <div class="result">
+            <small>Adjusted daily demand</small>
+            <strong id="adjusted">21.6 units</strong>
+          </div>
+          <div class="result">
+            <small>Reorder point (lead time + safety)</small>
+            <strong id="rop">130 units</strong>
+          </div>
+          <div class="result">
+            <small>Suggested order / estimated cost</small>
+            <strong id="order">96 units</strong>
+            <small id="orderCost">Estimated cost ₹4,320</small>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      FreshStock AI Enterprise Inventory & POS Suite • Python Flask + SQLite Backend Architecture.<br>
+      Ready for multi-user deployment on Render, Railway, Docker, or AWS.
+    </footer>
+  </main>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- Receive Stock Modal -->
+<div class="modal-overlay" id="receiveModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>＋ Receive Stock Batch</h3>
+      <button class="modal-close" onclick="closeModal('receiveModal')">&times;</button>
+    </div>
+    <form id="receiveForm">
+      <div class="modal-body">
+        <div class="field">
+          <label for="modalReceiveProduct">Select Product *</label>
+          <select id="modalReceiveProduct" required></select>
+        </div>
+        <div class="field">
+          <label for="modalReceiveQty">Quantity Received (units) *</label>
+          <input id="modalReceiveQty" type="number" min="1" value="12" required>
+        </div>
+        <div class="field">
+          <label for="modalReceiveLot">Batch / Lot ID</label>
+          <input id="modalReceiveLot" placeholder="LOT-XXXX">
+        </div>
+        <div class="field">
+          <label for="modalReceiveExpiry">Expiry / Best-Before Date</label>
+          <input id="modalReceiveExpiry" type="date">
+        </div>
+        <div class="field">
+          <label for="modalReceiveDate">Received Date</label>
+          <input id="modalReceiveDate" type="date">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('receiveModal')">Cancel</button>
+        <button type="submit" class="btn primary">Confirm Receipt</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- POS Record Sale Modal -->
+<div class="modal-overlay" id="saleModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>↗ Record Store Checkout / Sale</h3>
+      <button class="modal-close" onclick="closeModal('saleModal')">&times;</button>
+    </div>
+    <form id="saleForm">
+      <div class="modal-body">
+        <div class="field">
+          <label for="modalSaleProduct">Select Product Sold *</label>
+          <select id="modalSaleProduct" required></select>
+        </div>
+        <div class="field">
+          <label for="modalSaleQty">Units Sold *</label>
+          <input id="modalSaleQty" type="number" min="1" value="1" required>
+        </div>
+        <div class="field">
+          <label for="modalSalePrice">Selling Price per Unit (₹) *</label>
+          <input id="modalSalePrice" type="number" min="0" step="0.5" value="45" required>
+        </div>
+        <div class="field">
+          <label for="modalSaleNotes">Transaction Notes / Bill Ref</label>
+          <input id="modalSaleNotes" placeholder="e.g. Cash Counter 1 / UPI">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('saleModal')">Cancel</button>
+        <button type="submit" class="btn primary">Record Checkout</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Expire / Waste Modal -->
+<div class="modal-overlay" id="expireModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>⚠ Mark Batch Expired or Damaged</h3>
+      <button class="modal-close" onclick="closeModal('expireModal')">&times;</button>
+    </div>
+    <form id="expireForm">
+      <div class="modal-body">
+        <input type="hidden" id="modalExpireBatchId">
+        <div class="field">
+          <label for="modalExpireReason">Reason for Disposal *</label>
+          <select id="modalExpireReason">
+            <option value="expired">Past Expiry Date</option>
+            <option value="damaged">Packaging Damaged</option>
+            <option value="spoiled">Spoilage / Quality Deterioration</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="modalExpireQty">Units to write off (leave blank for entire batch)</label>
+          <input id="modalExpireQty" type="number" min="1" placeholder="All remaining units">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('expireModal')">Cancel</button>
+        <button type="submit" class="btn danger">Confirm Write-Off</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Product Modal -->
+<div class="modal-overlay" id="editProductModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>✎ Edit Product Settings</h3>
+      <button class="modal-close" onclick="closeModal('editProductModal')">&times;</button>
+    </div>
+    <form id="editProductForm">
+      <div class="modal-body">
+        <input type="hidden" id="editProdId">
+        <div class="field">
+          <label for="editProdName">Product Name *</label>
+          <input id="editProdName" required>
+        </div>
+        <div class="field">
+          <label for="editProdCategory">Category</label>
+          <select id="editProdCategory">
+            <option value="grocery">Grocery</option>
+            <option value="fresh">Fresh Food</option>
+            <option value="household">Household</option>
+            <option value="beverages">Beverages</option>
+            <option value="bakery">Bakery</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="calc-grid" style="grid-template-columns: 1fr 1fr; gap: 10px">
+          <div class="field">
+            <label for="editProdCost">Cost Price (₹)</label>
+            <input id="editProdCost" type="number" step="0.5" required>
+          </div>
+          <div class="field">
+            <label for="editProdPrice">Selling Price (₹)</label>
+            <input id="editProdPrice" type="number" step="0.5" required>
+          </div>
+          <div class="field">
+            <label for="editProdWeekly">Weekly Sales Est.</label>
+            <input id="editProdWeekly" type="number" min="0" required>
+          </div>
+          <div class="field">
+            <label for="editProdLead">Lead Time (days)</label>
+            <input id="editProdLead" type="number" min="0" required>
+          </div>
+          <div class="field">
+            <label for="editProdPack">Pack Size</label>
+            <input id="editProdPack" type="number" min="1" required>
+          </div>
+          <div class="field">
+            <label for="editProdSafety">Safety Stock (units)</label>
+            <input id="editProdSafety" type="number" min="0" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="closeModal('editProductModal')">Cancel</button>
+        <button type="submit" class="btn primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
